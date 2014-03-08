@@ -9,6 +9,24 @@ import mock
 
 from djangorecipe.recipe import Recipe
 
+is_win32 = sys.platform == 'win32'
+
+
+def script_path(dir, *names):
+    """Gets the path to a script, adding the -script.py suffix if necessary"""
+    path = os.path.join(dir, *names)
+    if is_win32 and not os.path.exists(path):
+        path_win = path + '-script.py'
+        if os.path.exists(path_win):
+            path = path_win
+    return path
+
+
+def script_cat(dir, *names):
+    """Reads a script file, adding the -script.py suffix if necessary"""
+    path = script_path(dir, *names)
+    return open(path).read()
+
 
 class BaseTestRecipe(unittest.TestCase):
 
@@ -67,6 +85,7 @@ class TestRecipe(BaseTestRecipe):
         f, name = tempfile.mkstemp()
         # To show the function in action we need to delete the file
         # before testing.
+        os.close(f)  # needed on windows
         os.remove(name)
         # The method accepts a template argument which it will use
         # with the options argument for string substitution.
@@ -136,7 +155,7 @@ class TestRecipe(BaseTestRecipe):
         self.recipe.create_manage_script([], [])
         manage = os.path.join(self.bin_dir, 'django')
         self.assertTrue("djangorecipe.manage.main('project.spameggs')"
-                        in open(manage).read())
+                        in script_cat(manage))
 
     def test_create_project(self):
         # If a project does not exist already the recipe will create
@@ -169,9 +188,8 @@ class TestRecipe(BaseTestRecipe):
 
         # check that the management script refers to the settings module
         # specified in recipe.options, unchanged (no parent package)
-        manage = os.path.join(self.bin_dir, 'django')
         self.assertTrue("djangorecipe.manage.main('spameggs')"
-                        in open(manage).read())
+                        in script_cat(self.bin_dir, 'django'))
 
 
 class TestRecipeScripts(BaseTestRecipe):
@@ -184,19 +202,18 @@ class TestRecipeScripts(BaseTestRecipe):
         self.recipe.make_scripts([], [])
         # This should have created a script in the bin dir
 
-        wsgi_script = os.path.join(self.bin_dir, 'django.wsgi')
+        wsgi_script = script_path(self.bin_dir, 'django.wsgi')
         self.assertTrue(os.path.exists(wsgi_script))
 
     def test_contents_protocol_script_wsgi(self):
         self.recipe.options['wsgi'] = 'true'
         self.recipe.make_scripts([], [])
-        wsgi_script = os.path.join(self.bin_dir, 'django.wsgi')
 
         # The contents should list our paths
-        contents = open(wsgi_script).read()
-         # It should also have a reference to our settings module
+        contents = script_cat(self.bin_dir, 'django.wsgi')
+        # It should also have a reference to our settings module
         self.assertTrue('project.development' in contents)
-         # and a line which set's up the WSGI app
+        # and a line which set's up the WSGI app
         self.assertTrue("application = "
                         "djangorecipe.wsgi.main('project.development', "
                         "logfile='')"
@@ -207,17 +224,15 @@ class TestRecipeScripts(BaseTestRecipe):
         self.recipe.options['wsgi'] = 'true'
         self.recipe.options['initialization'] = 'import os\nassert True'
         self.recipe.make_scripts([], [])
-        wsgi_script = os.path.join(self.bin_dir, 'django.wsgi')
         self.assertTrue('import os\nassert True\n\nimport djangorecipe'
-                        in open(wsgi_script).read())
+                        in script_cat(self.bin_dir, 'django.wsgi'))
 
     def test_contents_log_protocol_script_wsgi(self):
         self.recipe.options['wsgi'] = 'true'
         self.recipe.options['logfile'] = '/foo'
         self.recipe.make_scripts([], [])
 
-        wsgi_script = os.path.join(self.bin_dir, 'django.wsgi')
-        contents = open(wsgi_script).read()
+        contents = script_cat(self.bin_dir, 'django.wsgi')
 
         self.assertTrue("logfile='/foo'" in contents)
 
@@ -226,7 +241,7 @@ class TestRecipeScripts(BaseTestRecipe):
         self.recipe.options['wsgi'] = 'true'
         self.recipe.options['wsgi-script'] = 'foo-wsgi.py'
         self.recipe.make_scripts([], [])
-        wsgi_script = os.path.join(self.bin_dir, 'foo-wsgi.py')
+        wsgi_script = script_path(self.bin_dir, 'foo-wsgi.py')
         self.assertTrue(os.path.exists(wsgi_script))
 
     @mock.patch('zc.buildout.easy_install.scripts',
@@ -242,33 +257,30 @@ class TestRecipeScripts(BaseTestRecipe):
         # manage.py script. It has all the same functionality as the
         # original one but it sits in the bin dir instead of within
         # the project.
-        manage = os.path.join(self.bin_dir, 'django')
         self.recipe.create_manage_script([], [])
-        self.assertTrue(os.path.exists(manage))
+        self.assertTrue(os.path.exists(script_path(self.bin_dir, 'django')))
 
     def test_create_manage_script_projectegg(self):
         # When a projectegg is specified, then the egg specified
         # should get used as the project file.
-        manage = os.path.join(self.bin_dir, 'django')
         self.recipe.options['projectegg'] = 'spameggs'
         self.recipe.get_root_pkg()
         self.recipe.create_manage_script([], [])
+        manage = script_path(self.bin_dir, 'django')
         self.assertTrue(os.path.exists(manage))
         # Check that we have 'spameggs' as the project
         self.assertTrue("djangorecipe.manage.main('spameggs.development')"
-                        in open(manage).read())
+                        in script_cat(manage))
 
     def test_create_manage_script_with_initialization(self):
-        manage = os.path.join(self.bin_dir, 'django')
         self.recipe.options['initialization'] = 'import os\nassert True'
         self.recipe.create_manage_script([], [])
         self.assertTrue('import os\nassert True\n\nimport djangorecipe'
-                        in open(manage).read())
+                        in script_cat(self.bin_dir, 'django'))
 
     def test_create_wsgi_script_projectegg(self):
         # When a projectegg is specified, then the egg specified
         # should get used as the project in the wsgi script.
-        wsgi = os.path.join(self.bin_dir, 'django.wsgi')
         recipe_dir = os.path.abspath(
             os.path.join(os.path.dirname(__file__), '..'))
         self.recipe.options['projectegg'] = 'spameggs'
@@ -276,9 +288,11 @@ class TestRecipeScripts(BaseTestRecipe):
         self.recipe.get_root_pkg()
         self.recipe.make_scripts([recipe_dir], [])
 
-        self.assertTrue(os.path.exists(wsgi))
+        wsgi_script = script_path(self.bin_dir, 'django.wsgi')
+        self.assertTrue(os.path.exists(wsgi_script))
         # Check that we have 'spameggs' as the project
-        self.assertTrue('spameggs.development' in open(wsgi).read())
+        self.assertTrue('spameggs.development' in
+                        script_cat(wsgi_script))
 
 
 class TestTesTRunner(BaseTestRecipe):
@@ -287,7 +301,6 @@ class TestTesTRunner(BaseTestRecipe):
         # An executable script can be generated which will make it
         # possible to execute the Django test runner. This options
         # only works if we specify one or apps to test.
-        testrunner = os.path.join(self.bin_dir, 'test')
 
         # This first argument sets extra_paths, we will use this to
         # make sure the script can find this recipe
@@ -298,7 +311,7 @@ class TestTesTRunner(BaseTestRecipe):
         # testrunner
         self.recipe.options['test'] = 'knight'
         self.recipe.create_test_runner([recipe_dir], [])
-        self.assertTrue(os.path.exists(testrunner))
+        self.assertTrue(os.path.exists(script_path(self.bin_dir, 'test')))
 
     def test_not_create_test_runner(self):
         recipe_dir = os.path.abspath(
@@ -313,7 +326,6 @@ class TestTesTRunner(BaseTestRecipe):
     def test_create_test_runner_with_initialization(self):
         recipe_dir = os.path.abspath(
             os.path.join(os.path.dirname(__file__), '..'))
-        testrunner = os.path.join(self.bin_dir, 'test')
 
         # When we specify an app to test it should create the the
         # testrunner
@@ -321,7 +333,7 @@ class TestTesTRunner(BaseTestRecipe):
         self.recipe.options['initialization'] = 'import os\nassert True'
         self.recipe.create_test_runner([recipe_dir], [])
         self.assertTrue('import os\nassert True\n\nimport djangorecipe'
-                        in open(testrunner).read())
+                        in script_cat(self.bin_dir, 'test'))
 
 
 class TestBoilerplate(BaseTestRecipe):
