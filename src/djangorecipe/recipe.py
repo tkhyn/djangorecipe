@@ -28,7 +28,10 @@ class Recipe(object):
         options.setdefault('project', 'project')
         options.setdefault('settings', 'development')
 
-        options.setdefault('urlconf', options['project'] + '.urls')
+        # gets the root package path
+        self.get_root_pkg()
+
+        options.setdefault('urlconf', self.root_pkg + 'urls')
         options.setdefault(
             'media_root',
             "os.path.join(os.path.dirname(__file__), 'media')")
@@ -50,7 +53,10 @@ class Recipe(object):
     def install(self):
         base_dir = self.buildout['buildout']['directory']
 
-        project_dir = os.path.join(base_dir, self.options['project'])
+        if self.root_pkg:
+            project_dir = os.path.join(base_dir, self.options['project'])
+        else:
+            project_dir = base_dir
 
         extra_paths = self.get_extra_paths()
         requirements, ws = self.egg.working_set(['djangorecipe'])
@@ -65,26 +71,27 @@ class Recipe(object):
         # Make the wsgi and fastcgi scripts if enabled
         script_paths.extend(self.make_scripts(extra_paths, ws))
 
-        # Create default settings if we haven't got a project
-        # egg specified, and if it doesn't already exist
+        # Create default project files if we haven't got a project
+        # egg specified, and if the settings don't already exist
         if not self.options.get('projectegg'):
-            if not os.path.exists(project_dir):
+            settings_path = \
+                os.path.join(project_dir, *self.options['settings'].split('.'))
+            if not os.path.exists(settings_path):
                 self.create_project(project_dir)
             else:
                 self.log.info(
-                    'Skipping creating of project: %(project)s since '
-                    'it exists' % self.options)
+                    'Skipping creating project files for %(project)s since '
+                    'its main settings module exists' % self.options)
 
         return script_paths
 
     def create_manage_script(self, extra_paths, ws):
-        project = self.options.get('projectegg', self.options['project'])
         return zc.buildout.easy_install.scripts(
             [(self.options.get('control-script', self.name),
               'djangorecipe.manage', 'main')],
             ws, sys.executable, self.options['bin-directory'],
             extra_paths=extra_paths,
-            arguments="'%s.%s'" % (project, self.options['settings']),
+            arguments="'%s%s'" % (self.root_pkg, self.options['settings']),
             initialization=self.options['initialization'])
 
     def create_test_runner(self, extra_paths, working_set):
@@ -97,8 +104,8 @@ class Recipe(object):
                 working_set, sys.executable,
                 self.options['bin-directory'],
                 extra_paths=extra_paths,
-                arguments="'%s.%s', %s" % (
-                    self.options['project'],
+                arguments="'%s%s', %s" % (
+                    self.root_pkg,
                     self.options['settings'],
                     ', '.join(["'%s'" % app for app in apps])),
                 initialization=self.options['initialization'])
@@ -106,7 +113,8 @@ class Recipe(object):
             return []
 
     def create_project(self, project_dir):
-        os.makedirs(project_dir)
+        if not os.path.exists(project_dir):
+            os.makedirs(project_dir)
 
         # Find the current Django versions in the buildout versions.
         # Assume the newest Django when no version is found.
@@ -126,6 +134,8 @@ class Recipe(object):
 
         template_vars = {'secret': self.generate_secret()}
         template_vars.update(self.options)
+
+        template_vars['root_pkg'] = self.root_pkg
 
         self.create_file(
             os.path.join(project_dir, 'development.py'),
@@ -161,8 +171,6 @@ class Recipe(object):
             zc.buildout.easy_install.script_header + \
             script_template[protocol]
         if self.options.get(protocol, '').lower() == 'true':
-            project = self.options.get('projectegg',
-                                       self.options['project'])
             scripts.extend(
                 zc.buildout.easy_install.scripts(
                     [(self.options.get('wsgi-script') or
@@ -174,12 +182,21 @@ class Recipe(object):
                     sys.executable,
                     self.options['bin-directory'],
                     extra_paths=extra_paths,
-                    arguments="'%s.%s', logfile='%s'" % (
-                        project, self.options['settings'],
+                    arguments="'%s%s', logfile='%s'" % (
+                        self.root_pkg, self.options['settings'],
                         self.options.get('logfile')),
                     initialization=self.options['initialization']))
         zc.buildout.easy_install.script_template = _script_template
         return scripts
+
+    def get_root_pkg(self):
+        project = self.options.get('projectegg', self.options['project'])
+        if project == '.':
+            self.root_pkg = ''
+            self.options['project'] = \
+                os.path.dirname(self.buildout['buildout']['directory'])
+        else:
+            self.root_pkg = project + '.'
 
     def get_extra_paths(self):
         extra_paths = [self.buildout['buildout']['directory']]

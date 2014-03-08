@@ -14,11 +14,11 @@ application = %(module_name)s.%(attrs)s(%(arguments)s)
 }
 
 production_settings = """
-from %(project)s.settings import *
+from %(root_pkg)ssettings import *
 """
 
 development_settings = """
-from %(project)s.settings import *
+from %(root_pkg)ssettings import *
 DEBUG=True
 TEMPLATE_DEBUG=DEBUG
 """

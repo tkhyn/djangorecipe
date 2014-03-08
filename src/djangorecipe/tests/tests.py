@@ -152,6 +152,27 @@ class TestRecipe(BaseTestRecipe):
             self.assertTrue(
                 os.path.exists(os.path.join(project_dir, f)))
 
+    @mock.patch('zc.recipe.egg.egg.Scripts.working_set',
+                return_value=(None, []))
+    def test_project_at_root(self, working_set):
+        # If project = ., the project is created at the root
+        self.recipe.options['project'] = '.'
+        self.recipe.get_root_pkg()
+        self.recipe.options['settings'] = 'spameggs'
+
+        self.recipe.install()
+
+        # check that files have been created at the root
+        for f in ('settings.py', 'development.py', 'production.py',
+                  '__init__.py', 'urls.py', 'media', 'templates'):
+            self.assertTrue(os.path.exists(os.path.join(self.buildout_dir, f)))
+
+        # check that the management script refers to the settings module
+        # specified in recipe.options, unchanged (no parent package)
+        manage = os.path.join(self.bin_dir, 'django')
+        self.assertTrue("djangorecipe.manage.main('spameggs')"
+                        in open(manage).read())
+
 
 class TestRecipeScripts(BaseTestRecipe):
 
@@ -230,6 +251,7 @@ class TestRecipeScripts(BaseTestRecipe):
         # should get used as the project file.
         manage = os.path.join(self.bin_dir, 'django')
         self.recipe.options['projectegg'] = 'spameggs'
+        self.recipe.get_root_pkg()
         self.recipe.create_manage_script([], [])
         self.assertTrue(os.path.exists(manage))
         # Check that we have 'spameggs' as the project
@@ -251,6 +273,7 @@ class TestRecipeScripts(BaseTestRecipe):
             os.path.join(os.path.dirname(__file__), '..'))
         self.recipe.options['projectegg'] = 'spameggs'
         self.recipe.options['wsgi'] = 'true'
+        self.recipe.get_root_pkg()
         self.recipe.make_scripts([recipe_dir], [])
 
         self.assertTrue(os.path.exists(wsgi))
