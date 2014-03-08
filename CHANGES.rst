@@ -4,6 +4,7 @@ Changes
 1.8 (unreleased)
 ----------------
 
+- Tests can now be run on windows
 - The project directory can now be set as the buildout directory by setting
   the 'project' option to a single dot (.)
 
