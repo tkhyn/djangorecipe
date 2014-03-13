@@ -4,13 +4,15 @@ Changes
 1.8 (unreleased)
 ----------------
 
-- Nothing changed yet.
+- Tests can now be run on windows
+- The project directory can now be set as the buildout directory by setting
+  the 'project' option to a single dot (.)
 
 
 1.7 (2013-12-11)
 ----------------
 
-- Add option to change the wsgi script name. Thanks hedleyroos (Fixes pull #74)  
+- Add option to change the wsgi script name. Thanks hedleyroos (Fixes pull #74)
 
 1.6 (2013-10-28)
 ----------------

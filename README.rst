@@ -44,7 +44,9 @@ The recipe supports the following options.
 
 project
   This option sets the name for your project. The recipe will create a
-  basic structure if the project is not already there.
+  basic structure if the project settings module does not already exist.
+  If this option is set to '.', the project root is understood to be the
+  buildout root.
 
 projectegg
   Use this instead of the project option when you want to use an egg
