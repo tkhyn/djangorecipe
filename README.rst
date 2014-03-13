@@ -59,6 +59,13 @@ settings
   production setup from your development setup. It defaults to
   `development`.
 
+template
+  The name of the template folder that should be used when creating a new
+  project. By default, the recipe creates a django project exactly like the
+  django-admin.py startproject command, matching the major django version you
+  are using. For this option to be taken into account, the
+  {buildout:django_template_dirs} must contain at least one entry.
+
 extra-paths
   All paths specified here will be used to extend the default Python
   path for the `bin/*` scripts.
@@ -112,8 +119,19 @@ secret
   string by default.
 
 
+Dedicated buildout options
+--------------------------
+
+The recipe can optionally use an option from the buildout section to get the
+directories where template folders lie.
+
+django_template_dirs
+   This is a list of directories where project template folders can be found
+   The template is defined by the above option 'template'
+
+
 Another example
------------------
+---------------
 
 The next example shows you how to use some more of the options::
 
@@ -140,7 +158,7 @@ The next example shows you how to use some more of the options::
     anotherapp
 
 Example using .pth files
--------------------------
+------------------------
 
 Pinax uses a .pth file to add a bunch of libraries to its path; we can
 specify it's directory to get the libraries it specified added to our
@@ -183,7 +201,7 @@ svn:external) directly under this directory in to 'myproject'.
 
 
 Example with a Django version from a repository
----------------------------------------------------
+-----------------------------------------------
 
 If you want to use a specific Django version from a source
 repository you could use mr.developer: http://pypi.python.org/pypi/mr.developer
@@ -203,7 +221,7 @@ Here is an example for using the Django development version::
   project = project
 
 Example configuration for mod_wsgi
----------------------------------------------------
+----------------------------------
 
 If you want to deploy a project using mod_wsgi you could use this
 example as a starting point::
@@ -220,7 +238,7 @@ example as a starting point::
   </VirtualHost>
 
 Generating a control script for PyDev
----------------------------------------------------
+-------------------------------------
 
 Running Django with auto-reload in PyDev requires adding a small snippet
 of code::
@@ -251,7 +269,7 @@ one for PyDev, with the required snippet, using the recipe's
     pydevd.patch_django_autoreload(patch_remote_debugger=False, patch_show_console=True)
 
 Several wsgi scripts for one Apache virtual host instance
-----------------------------------------------------------
+---------------------------------------------------------
 
 There is a problem when several wsgi scripts are combined in a single virtual
 host instance of Apache. This is due to the fact that Django uses the
@@ -292,3 +310,63 @@ recipe's `initialization` option::
         from configurations.management import execute_from_command_line
         import django
         django.core.management.execute_from_command_line = execute_from_command_line
+
+
+Templating
+----------
+
+The template engine is as simple as it can be and relies upon pythons's
+string.Template. A variable can be inserted in any file or directory name or
+file content using the syntax ${variable}.
+
+The following variables are available:
+
+- all the recipe options from the configuration file
+- secret: the secret key for django settings
+- project_name: the project name (project or the buildout directory name if
+  project == '.')
+- root_pkg: the root package (empty string if project == '.')
+- year: the current year
+- month: the current month
+- day: the current day of the month
+
+You may use these variables in any file of the template directory.
+
+For example, for a copyright notice in a module's docstring, you may use::
+
+   (c) ${year} Me
+
+Example:
+........
+
+In ~/.buildout/default.cfg::
+
+    [buildout]
+    django_template_dirs =
+      /my/project/template/directory
+      /my/project/template/directory2
+
+In buildout.cfg::
+
+    [buildout]
+    parts = django
+    # relative to the buildout directory
+    django_template_dirs +=
+      templates
+    eggs =
+      egg1
+      egg2
+
+    [django]
+    recipe = djangorecipe
+    eggs = ${buildout:eggs}
+    project = myproject
+    template = mytemplate
+
+The template directories are explored in this order (reverse of the order in
+which they are defined to enable overriding):
+
+1. buildout/directory/templates
+2. /my/project/template/directory2
+3. /my/project/template/directory
+

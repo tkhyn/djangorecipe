@@ -3,12 +3,14 @@ import os
 import logging
 import re
 import sys
+import shutil
+from datetime import date
+from distutils.version import StrictVersion
 
 from zc.buildout import UserError
 import zc.recipe.egg
 
-from djangorecipe.boilerplate import script_template, versions
-
+from djangorecipe.templating import process, process_tree, script_template
 
 class Recipe(object):
     def __init__(self, buildout, name, options):
@@ -113,64 +115,93 @@ class Recipe(object):
             return []
 
     def create_project(self, project_dir):
+        # create the project directory if it does not exist
         if not os.path.exists(project_dir):
             os.makedirs(project_dir)
 
-        # Find the current Django versions in the buildout versions.
-        # Assume the newest Django when no version is found.
-        version = None
-        b_versions = self.buildout.get('versions')
-        if b_versions:
-            django_version = (
-                b_versions.get('django') or
-                b_versions.get('Django')
-            )
-            if django_version:
-                version_re = re.compile("\d+\.\d+")
-                match = version_re.match(django_version)
-                version = match and match.group()
+        # retrieve user-provided template directories
+        template_dirs = self.buildout['buildout'] \
+                            .get('django_template_dirs', [])
 
-        config = versions.get(version, versions['Newest'])
+        # retrieve template name
+        template_name = self.options.get('template', None)
 
-        template_vars = {'secret': self.generate_secret()}
+        if template_name and template_dirs:
+            # the user provided a template to load
+
+            # look for a template in the template directories provided
+            # in reverse so that the last setting is prioritary
+            for d in reversed(template_dirs):
+                d = os.path.abspath(d)
+                if template_name in os.listdir(d):
+                    # we have a template candidate, load it
+                    temp_path = os.path.join(d, template_name)
+
+        else:
+            # no template name was provided
+
+            temp_path = os.path.join(os.path.dirname(__file__),
+                                     'templates')
+
+            # Find the current Django versions in the buildout versions.
+            version = None
+            b_versions = self.buildout.get('versions')
+            if b_versions:
+                django_version = (
+                    b_versions.get('django') or
+                    b_versions.get('Django')
+                )
+                if django_version:
+                    version_re = re.compile("\d+\.\d+")
+                    match = version_re.match(django_version)
+                    version = match and match.group()
+
+                if version not in os.listdir(temp_path):
+                    # the version is invalid (no template)
+                    version = None
+
+            # if the version could not be found, gets the latest one from the
+            # default templates names
+            if not version:
+                av_versions = os.listdir(temp_path)
+                av_versions.sort(key=StrictVersion)
+                version = av_versions[-1]
+
+            temp_path = os.path.join(temp_path, version)
+
+        # prepare templating engine
+        template_vars = self.get_template_vars()
         template_vars.update(self.options)
 
-        template_vars['root_pkg'] = self.root_pkg
-
-        self.create_file(
-            os.path.join(project_dir, 'development.py'),
-            config['development_settings'], template_vars)
-
-        self.create_file(
-            os.path.join(project_dir, 'production.py'),
-            config['production_settings'], template_vars)
-
-        self.create_file(
-            os.path.join(project_dir, 'urls.py'),
-            config['urls'], template_vars)
-
-        self.create_file(
-            os.path.join(project_dir, 'settings.py'),
-            config['settings'], template_vars)
-
-        # Create the media and templates directories for our
-        # project
-        os.mkdir(os.path.join(project_dir, 'media'))
-        os.mkdir(os.path.join(project_dir, 'templates'))
-
-        # Make the settings dir a Python package so that Django
-        # can load the settings from it. It will act like the
-        # project dir.
-        open(os.path.join(project_dir, '__init__.py'), 'w').close()
+        # copy files and run templating engine
+        for sub in os.listdir(temp_path):
+            tgt_path = os.path.join(project_dir, sub)
+            if os.path.exists(tgt_path):
+                sys.stderr.write('ERROR: %s already exists in %s and ' \
+                    'cannot be overwritten by djangorecipe\'s template ' \
+                    'engine.' % (sub, project_dir))
+            else:
+                if os.path.isdir(sub):
+                    # copy the subdirectory tree
+                    shutil.copytree(temp_path, tgt_path)
+                    process_tree(tgt_path, template_vars)
+                else:
+                    # copy the file and run templating engine
+                    shutil.copy(os.path.join(temp_path, sub),
+                                tgt_path)
+                    process(tgt_path, template_vars)
 
     def make_scripts(self, extra_paths, ws):
         scripts = []
-        _script_template = zc.buildout.easy_install.script_template
         protocol = 'wsgi'
-        zc.buildout.easy_install.script_template = \
-            zc.buildout.easy_install.script_header + \
-            script_template[protocol]
+
         if self.options.get(protocol, '').lower() == 'true':
+            _script_template = zc.buildout.easy_install.script_template
+            protocol = 'wsgi'
+            zc.buildout.easy_install.script_template = \
+                zc.buildout.easy_install.script_header + \
+                script_template[protocol]
+
             scripts.extend(
                 zc.buildout.easy_install.scripts(
                     [(self.options.get('wsgi-script') or
@@ -186,17 +217,33 @@ class Recipe(object):
                         self.root_pkg, self.options['settings'],
                         self.options.get('logfile')),
                     initialization=self.options['initialization']))
-        zc.buildout.easy_install.script_template = _script_template
+            zc.buildout.easy_install.script_template = _script_template
+
         return scripts
+
+    def get_template_vars(self):
+        today = date.today()
+        vars = {
+            'secret': self.generate_secret(),
+            'project_name': self.project_name,
+            'root_pkg': self.root_pkg,
+            'year': today.year,
+            'month': today.month,
+            'day': today.day
+        }
+        vars.update(self.options)
+        return vars
 
     def get_root_pkg(self):
         project = self.options.get('projectegg', self.options['project'])
         if project == '.':
             self.root_pkg = ''
-            self.options['project'] = \
+            self.project_name = os.path.basename(
                 os.path.dirname(self.buildout['buildout']['directory'])
+            )
         else:
             self.root_pkg = project + '.'
+            self.project_name = project
 
     def get_extra_paths(self):
         extra_paths = [self.buildout['buildout']['directory']]
@@ -231,14 +278,6 @@ class Recipe(object):
 
         # Make the wsgi and fastcgi scripts if enabled
         self.make_scripts(extra_paths, ws)
-
-    def create_file(self, file, template, options):
-        if os.path.exists(file):
-            return
-
-        f = open(file, 'w')
-        f.write(template % options)
-        f.close()
 
     def generate_secret(self):
         chars = 'abcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*(-_=+)'

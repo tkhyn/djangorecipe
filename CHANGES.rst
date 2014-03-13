@@ -7,6 +7,9 @@ Changes
 - Tests can now be run on windows
 - The project directory can now be set as the buildout directory by setting
   the 'project' option to a single dot (.)
+- The project is now generated from template directories that can be
+  user-defined, using python's built-in template engine for string
+  substitution
 
 
 1.7 (2013-12-11)
