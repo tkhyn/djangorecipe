@@ -84,7 +84,7 @@ class Recipe(object):
                 print settings_path
                 self.create_project(project_dir)
             else:
-                self.log.info(
+                self.log.debug(
                     'Skipping creating project files for %(project)s since '
                     'its main settings module exists' % self.options)
 
