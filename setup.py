@@ -17,7 +17,7 @@ setup(name='djangorecipe',
       description="Buildout recipe for Django",
       long_description='\n\n'.join([readme, changes]),
       classifiers=[
-        'Framework :: Buildout',
+        'Framework :: Buildout :: Recipe',
         'Framework :: Django',
         'Topic :: Software Development :: Build Tools',
         'Development Status :: 5 - Production/Stable',

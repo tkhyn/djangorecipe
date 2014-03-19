@@ -12,6 +12,7 @@ import zc.recipe.egg
 
 from djangorecipe.templating import process, process_tree, script_template
 
+
 class Recipe(object):
     def __init__(self, buildout, name, options):
         # The use of version is deprecated.
@@ -78,7 +79,9 @@ class Recipe(object):
         if not self.options.get('projectegg'):
             settings_path = \
                 os.path.join(project_dir, *self.options['settings'].split('.'))
-            if not os.path.exists(settings_path):
+            if not (os.path.exists(os.path.join(settings_path, '__init__.py'))
+                    or os.path.exists('.'.join((settings_path, 'py')))):
+                print settings_path
                 self.create_project(project_dir)
             else:
                 self.log.info(
@@ -120,8 +123,9 @@ class Recipe(object):
             os.makedirs(project_dir)
 
         # retrieve user-provided template directories
-        template_dirs = self.buildout['buildout'] \
-                            .get('django_template_dirs', [])
+        template_dirs = self.buildout['djangorecipe'] \
+                            .get('template-dirs', '') \
+                            .splitlines()
 
         # retrieve template name
         template_name = self.options.get('template', None)
@@ -139,7 +143,6 @@ class Recipe(object):
 
         else:
             # no template name was provided
-
             temp_path = os.path.join(os.path.dirname(__file__),
                                      'templates')
 
@@ -175,20 +178,20 @@ class Recipe(object):
 
         # copy files and run templating engine
         for sub in os.listdir(temp_path):
+            src_path = os.path.join(temp_path, sub)
             tgt_path = os.path.join(project_dir, sub)
             if os.path.exists(tgt_path):
                 sys.stderr.write('ERROR: %s already exists in %s and ' \
                     'cannot be overwritten by djangorecipe\'s template ' \
-                    'engine.' % (sub, project_dir))
+                    'engine.\n' % (sub, project_dir))
             else:
-                if os.path.isdir(sub):
+                if os.path.isdir(src_path):
                     # copy the subdirectory tree
-                    shutil.copytree(temp_path, tgt_path)
+                    shutil.copytree(src_path, tgt_path)
                     process_tree(tgt_path, template_vars)
                 else:
                     # copy the file and run templating engine
-                    shutil.copy(os.path.join(temp_path, sub),
-                                tgt_path)
+                    shutil.copy(src_path, tgt_path)
                     process(tgt_path, template_vars)
 
     def make_scripts(self, extra_paths, ws):
@@ -223,7 +226,7 @@ class Recipe(object):
 
     def get_template_vars(self):
         today = date.today()
-        vars = {
+        t_vars = {
             'secret': self.generate_secret(),
             'project_name': self.project_name,
             'root_pkg': self.root_pkg,
@@ -231,8 +234,9 @@ class Recipe(object):
             'month': today.month,
             'day': today.day
         }
-        vars.update(self.options)
-        return vars
+        t_vars.update(self.options)
+        t_vars.update(self.buildout.get('djangorecipe', {}))
+        return t_vars
 
     def get_root_pkg(self):
         project = self.options.get('projectegg', self.options['project'])

@@ -2,7 +2,7 @@
 Carry out template-based replacements in project files
 """
 
-import os
+import os, sys
 from string import Template
 
 script_template = {
@@ -44,13 +44,21 @@ def replace_ctnt(f, mapping):
     """
     if not os.path.isfile(f):
         return
-    # look for replacement strings in file
-    t_file = open(f, 'r+')
-    t = Template(t_file.read())
-    t_file.seek(0)
-    t_file.write(t.substitute(mapping))
-    t_file.truncate()
-    t_file.close()
+    try:
+        # look for replacement strings in file
+        t_file = open(f, 'r+')
+        t = Template(t_file.read())
+        t_file.seek(0)
+        t_file.write(t.substitute(mapping))
+        t_file.truncate()
+        t_file.close()
+    except Exception as e:
+        sys.stderr.write("""
+
+ERROR: while running template engine on file %s
+
+""" % f)
+        raise e
 
 
 def process(path, mapping):

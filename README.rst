@@ -64,7 +64,7 @@ template
   project. By default, the recipe creates a django project exactly like the
   django-admin.py startproject command, matching the major django version you
   are using. For this option to be taken into account, the
-  {buildout:django_template_dirs} must contain at least one entry.
+  {djangorecipe:template-dirs} list must contain at least one entry.
 
 extra-paths
   All paths specified here will be used to extend the default Python
@@ -119,15 +119,24 @@ secret
   string by default.
 
 
-Dedicated buildout options
---------------------------
+Dedicated djangorecipe options
+------------------------------
 
-The recipe can optionally use an option from the buildout section to get the
-directories where template folders lie.
+The recipe can optionally use options from a specific 'djangorecipe' section
+to set specific options. These options can be set in the
+~/.buildout/default.cfg file so that they apply to all buildouts. They are
+added to the template engine's mapping dictionary, and can be overriden by
+the current buildout's configuration.
 
-django_template_dirs
+The only option used internally by djangorecipe is:
+
+template-dirs
    This is a list of directories where project template folders can be found
    The template is defined by the above option 'template'
+
+All the other options can be set according to the user's needs and are used
+only at the template rendering stage. For example, you may want to set the
+'author' and 'email' options in the default.cfg file.
 
 
 Another example
@@ -317,7 +326,7 @@ Templating
 
 The template engine is as simple as it can be and relies upon pythons's
 string.Template. A variable can be inserted in any file or directory name or
-file content using the syntax ${variable}.
+file content using the syntax :code:`${variable}`.
 
 The following variables are available:
 
@@ -341,8 +350,8 @@ Example:
 
 In ~/.buildout/default.cfg::
 
-    [buildout]
-    django_template_dirs =
+    [djangorecipe]
+    template-dirs =
       /my/project/template/directory
       /my/project/template/directory2
 
@@ -351,7 +360,7 @@ In buildout.cfg::
     [buildout]
     parts = django
     # relative to the buildout directory
-    django_template_dirs +=
+    django-template-dirs +=
       templates
     eggs =
       egg1
