@@ -1,4 +1,2 @@
-# Include docs in the root.
+# Include docs
 include *.rst
-# Include templates
-recursive-include src/djangorecipe/templates *

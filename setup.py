@@ -34,6 +34,7 @@ setup(name='djangorecipe',
       url='https://github.com/rvanlaar/djangorecipe',
       license='BSD',
       zip_safe=False,
+      package_data={'': ['templates/**/*.py']},
       install_requires=[
         'zc.buildout',
         'zc.recipe.egg',
