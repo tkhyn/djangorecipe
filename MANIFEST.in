@@ -1,2 +1,2 @@
-# Include docs in the root.
+# Include docs
 include *.rst

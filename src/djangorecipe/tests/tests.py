@@ -1,9 +1,9 @@
-import copy
 import os
 import shutil
 import sys
 import tempfile
 import unittest
+from distutils.version import StrictVersion
 
 import mock
 
@@ -78,26 +78,6 @@ class TestRecipe(BaseTestRecipe):
         self.assertEqual(Recipe(*self.recipe_initialisation).options,
                          Recipe(*self.recipe_initialisation).options)
 
-    def test_create_file(self):
-        # The create file helper should create a file at a certain
-        # location unless it already exists. We will need a
-        # non-existing file first.
-        f, name = tempfile.mkstemp()
-        # To show the function in action we need to delete the file
-        # before testing.
-        os.close(f)  # needed on windows
-        os.remove(name)
-        # The method accepts a template argument which it will use
-        # with the options argument for string substitution.
-        self.recipe.create_file(name, 'Spam %s', 'eggs')
-        # Let's check the contents of the file
-        self.assertEqual(open(name).read(), 'Spam eggs')
-        # If we try to write it again it will just ignore our request
-        self.recipe.create_file(name, 'Spam spam spam %s', 'eggs')
-        # The content of the file should therefore be the same
-        self.assertEqual(open(name).read(), 'Spam eggs')
-        # Now remove our temp file
-        os.remove(name)
 
     def test_generate_secret(self):
         # To create a basic skeleton the recipe also generates a
@@ -163,13 +143,20 @@ class TestRecipe(BaseTestRecipe):
         project_dir = os.path.join(self.buildout_dir, 'project')
         self.recipe.create_project(project_dir)
 
-        # This should have create a project directory
+        # This should have created a project directory
         self.assertTrue(os.path.exists(project_dir))
-        # With this directory we should have a list of files.
-        for f in ('settings.py', 'development.py', 'production.py',
-                  '__init__.py', 'urls.py', 'media', 'templates'):
-            self.assertTrue(
-                os.path.exists(os.path.join(project_dir, f)))
+
+        # In this directory, we should find the same files as in the latest
+        # version default template directory
+        temp_path = os.path.join(os.path.dirname(__file__), '..', 'templates')
+        av_versions = os.listdir(temp_path)
+        av_versions.sort(key=StrictVersion)
+        version = av_versions[-1]
+        temp_path = os.path.join(temp_path, version)
+
+        self.assertTrue(set(os.listdir(temp_path)). \
+            issubset(os.listdir(project_dir)))
+
 
     @mock.patch('zc.recipe.egg.egg.Scripts.working_set',
                 return_value=(None, []))
@@ -181,10 +168,14 @@ class TestRecipe(BaseTestRecipe):
 
         self.recipe.install()
 
-        # check that files have been created at the root
-        for f in ('settings.py', 'development.py', 'production.py',
-                  '__init__.py', 'urls.py', 'media', 'templates'):
-            self.assertTrue(os.path.exists(os.path.join(self.buildout_dir, f)))
+        # Check that the files have been created
+        temp_path = os.path.join(os.path.dirname(__file__), '..', 'templates')
+        av_versions = os.listdir(temp_path)
+        av_versions.sort(key=StrictVersion)
+        version = av_versions[-1]
+        temp_path = os.path.join(temp_path, version)
+        self.assertTrue(set(os.listdir(temp_path)). \
+            issubset(os.listdir(self.buildout_dir)))
 
         # check that the management script refers to the settings module
         # specified in recipe.options, unchanged (no parent package)
@@ -335,46 +326,3 @@ class TestTesTRunner(BaseTestRecipe):
         self.assertTrue('import os\nassert True\n\nimport djangorecipe'
                         in script_cat(self.bin_dir, 'test'))
 
-
-class TestBoilerplate(BaseTestRecipe):
-
-    def test_boilerplate_newest(self):
-        """Test the default boilerplate."""
-
-        project_dir = os.path.join(self.buildout_dir, 'project')
-
-        secret = '$55upfci7a#gi@&e9o1-hb*k+f$3+(&b$j=cn67h#22*0%-bj0'
-        self.recipe.generate_secret = lambda: secret
-
-        self.recipe.create_project(project_dir)
-        settings = open(os.path.join(project_dir, 'settings.py')).read()
-        settings_dict = {'project': self.recipe.options['project'],
-                         'secret': secret,
-                         'urlconf': self.recipe.options['urlconf'],
-                         }
-        from djangorecipe.boilerplate import versions
-        self.assertEqual(versions['Newest']['settings'] % settings_dict,
-                          settings)
-
-    def test_boilerplate_1_2(self):
-        """Test the boilerplate for django 1.2."""
-
-        recipe_args = copy.deepcopy(self.recipe_initialisation)
-
-        recipe_args[0]['versions'] = {'django': '1.2.5'}
-        recipe = Recipe(*recipe_args)
-
-        secret = '$55upfci7a#gi@&e9o1-hb*k+f$3+(&b$j=cn67h#22*0%-bj0'
-        recipe.generate_secret = lambda: secret
-
-        project_dir = os.path.join(self.buildout_dir, 'project')
-        recipe.create_project(project_dir)
-        settings = open(os.path.join(project_dir, 'settings.py')).read()
-        settings_dict = {'project': self.recipe.options['project'],
-                         'secret': secret,
-                         'urlconf': self.recipe.options['urlconf'],
-                         }
-        from djangorecipe.boilerplate import versions
-
-        self.assertEqual(versions['1.2']['settings'] % settings_dict,
-                          settings)
