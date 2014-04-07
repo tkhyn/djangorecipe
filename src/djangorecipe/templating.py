@@ -20,6 +20,7 @@ application = %(module_name)s.%(attrs)s(%(arguments)s)
 """,
 }
 
+
 def replace_name(path, mapping):
     """
     Handles replacement strings in the file or directory name
@@ -51,7 +52,6 @@ def replace_ctnt(f, mapping):
         t_file.seek(0)
         t_file.write(t.substitute(mapping))
         t_file.truncate()
-        t_file.close()
     except Exception as e:
         sys.stderr.write("""
 
@@ -59,6 +59,8 @@ ERROR: while running template engine on file %s
 
 """ % f)
         raise e
+    finally:
+        t_file.close()
 
 
 def process(path, mapping):
@@ -72,8 +74,10 @@ def process_tree(directory, mapping):
     """
     Performs all templating operations on the directory and its children
     """
+    directory = replace_name(directory, mapping)
     for dirpath, dirnames, filenames in os.walk(directory):
         for f in filenames:
             process(os.path.join(dirpath, f), mapping)
         for d in dirnames:
-            replace_name(os.path.join(dirpath, d), mapping)
+            dirnames.remove(d)
+            dirnames.append(replace_name(os.path.join(dirpath, d), mapping))
