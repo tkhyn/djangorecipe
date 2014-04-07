@@ -84,8 +84,12 @@ class TestRecipe(BaseTestRecipe):
         # random secret for the settings file. Since it should very
         # unlikely that it will generate the same key a few times in a
         # row we will test it with letting it generate a few keys.
-        self.assertEqual(
-            10, len(set(self.recipe.generate_secret() for i in range(10))))
+        secrets = []
+        for i in range(10):
+            s = self.recipe.generate_secret()
+            for sp in secrets:
+                self.assertNotEqual(sp, s)
+            secrets.append(s)
 
     def test_version_option_deprecation(self):
         from zc.buildout import UserError
