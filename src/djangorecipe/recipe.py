@@ -79,9 +79,7 @@ class Recipe(object):
         if not self.options.get('projectegg'):
             settings_path = \
                 os.path.join(project_dir, *self.options['settings'].split('.'))
-            if not (os.path.exists(os.path.join(settings_path, '__init__.py'))
-                    or os.path.exists('.'.join((settings_path, 'py')))):
-                print settings_path
+            if not (os.path.exists(settings_path + '.py')):
                 self.create_project(project_dir)
             else:
                 self.log.debug(
@@ -140,6 +138,7 @@ class Recipe(object):
                 if template_name in os.listdir(d):
                     # we have a template candidate, load it
                     temp_path = os.path.join(d, template_name)
+                    break
 
         else:
             # no template name was provided
@@ -174,7 +173,6 @@ class Recipe(object):
 
         # prepare templating engine
         template_vars = self.get_template_vars()
-        template_vars.update(self.options)
 
         # copy files and run templating engine
         for sub in os.listdir(temp_path):
